@@ -51,6 +51,48 @@ providers:
       # Name of the environment variable that holds the token (not the token itself).
       tokenEnv: GITHUB_TOKEN
 
+  # Live GitLab (GitLab.com or self-managed). Token scope: read_api.
+  - id: gitlab-live
+    type: gitlab
+    name: GitLab (example-org)
+    enabled: false
+    mode: live
+    options:
+      baseUrl: https://gitlab.com            # e.g. https://git.example.com/gitlab for sub-path installs
+      projects: [example-org/infra, example-org/group/mobile]
+    credentials:
+      tokenEnv: GITLAB_TOKEN
+
+  # Live Jira Cloud. Basic auth: options.email + API token from id.atlassian.com.
+  - id: jira-live
+    type: jira
+    name: Jira (example)
+    enabled: false
+    mode: live
+    options:
+      baseUrl: https://your-site.atlassian.net
+      email: you@example.com
+      projects: [ENG]
+      # jql: "labels = backend"              # optional extra clause, combined with AND
+      statusMap:                             # optional; merged over the built-in mapping
+        Blocked: in_progress
+        "Ready for QA": in_review
+    credentials:
+      tokenEnv: JIRA_API_TOKEN
+
+  # Live OpenProject (self-hosted or cloud). Token: My account > Access tokens.
+  - id: openproject-live
+    type: openproject
+    name: OpenProject (example)
+    enabled: false
+    mode: live
+    options:
+      baseUrl: https://openproject.example.com
+      projects: [website]
+      # statusMap: { "On hold": in_progress }
+    credentials:
+      tokenEnv: OPENPROJECT_API_KEY
+
 # Explicit identity mappings used to combine contributors across providers.
 # Display names are never used for matching.
 identities:
@@ -63,3 +105,8 @@ identities:
         userId: "000000:00000000-0000-0000-0000-000000000000"
       - provider: github-live
         username: dev-one
+      # Jira and OpenProject usually hide emails: map their account IDs explicitly.
+      - provider: jira-live
+        userId: "000000:00000000-0000-0000-0000-000000000001"
+      - provider: openproject-live
+        userId: "42"

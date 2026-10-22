@@ -12,6 +12,7 @@ clearly labelled demo data.
 
 - [Capabilities](#capabilities)
 - [Adapter status: mock vs live](#adapter-status-mock-vs-live)
+- [Live providers](#live-providers)
 - [Installation](#installation)
 - [Development](#development)
 - [Commands](#commands)
@@ -40,20 +41,171 @@ clearly labelled demo data.
 | Type        | Category | Mock adapter    | Live adapter                         |
 | ----------- | -------- | --------------- | ------------------------------------ |
 | github      | git      | available       | **available** (GitHub REST API)      |
-| gitlab      | git      | available       | not implemented                      |
+| gitlab      | git      | available       | **available** (GitLab REST API v4)   |
 | bitbucket   | git      | not implemented | not implemented                      |
-| jira        | tasks    | available       | not implemented                      |
+| jira        | tasks    | available       | **available** (Jira Cloud REST v3)   |
 | linear      | tasks    | available       | not implemented                      |
 | clickup     | tasks    | not implemented | not implemented                      |
-| openproject | tasks    | not implemented | not implemented                      |
+| openproject | tasks    | not implemented | **available** (OpenProject API v3)   |
 
-The only live integration is **GitHub**. It calls the REST API for real and is
-tested against a stubbed `fetch`; no test uses the network. All other
-implemented adapters are mock-only. Types marked "not implemented" are listed so
-they can be recognised, but `providers add` refuses to save them, and an entry
-added by hand fails explicitly instead of being ignored.
+The live adapters (GitHub, GitLab, Jira Cloud, OpenProject) call the vendors'
+APIs for real. They are tested against a stubbed `fetch`; no test uses the
+network, and none has been run in CI against a real account. Linear is
+mock-only. Types marked "not implemented" are listed so they can be
+recognised, but `providers add` refuses to save them, and an entry added by
+hand fails explicitly instead of being ignored.
 
 `devzy providers list` shows this table for the running build.
+
+## Live providers
+
+All live adapters share these rules:
+
+- **Timeouts and retries.** Every request uses `settings.requestTimeoutMs`.
+  HTTP 429, 502, 503 and 504 are retried at most twice, waiting for
+  `Retry-After` (capped at 10 s) or 0.5 s / 1 s. Other errors are not retried.
+- **Errors.** 401 (bad credentials), 403 (missing permission), 404 (missing or
+  inaccessible project), rate limits, server errors, timeouts and network
+  failures get distinct messages. Messages never include tokens or response
+  bodies. A failed provider makes the report partial (exit 3); it never shows
+  as zero activity, and devzy never falls back to mock data.
+- **Pagination.** Bulk list endpoints with 100 items per page. Each adapter
+  has a page cap; going over it is an error asking you to narrow the period,
+  never a silent truncation.
+- **Host pinning.** Tokens are sent only to the configured host; pagination
+  links to another host are refused.
+- **Identity.** Adapters fill account IDs and emails only when the API returns
+  them and never look users up one by one. Jira and OpenProject usually hide
+  emails, so link those accounts to people with `identities[].accounts`
+  (provider instance ID + `userId`). Without a mapping they appear as
+  `unmapped` and can't match `--email`.
+- **Status mapping.** Jira and OpenProject statuses map to `completed`,
+  `in_progress` and `in_review` through built-in tables, which you can extend
+  or override per provider with `options.statusMap` (case-insensitive):
+
+  ```yaml
+  options:
+    statusMap:
+      Blocked: in_progress
+      "Ready for QA": in_review
+      Done: completed
+  ```
+
+  Statuses that map to nothing (e.g. "Won't Do", "Rejected") are excluded and
+  listed in the report notes.
+
+### GitHub
+
+GitHub.com or GitHub Enterprise Server (`baseUrl: https://host/api/v3`). Token:
+classic token with `repo` (private) or no scope (public), or a fine-grained
+token with *Contents: read*. Counts default-branch commits by committer date.
+Health: `GET /user` plus each repository.
+
+### GitLab
+
+| Option     | Required | Notes                                                        |
+| ---------- | -------- | ------------------------------------------------------------ |
+| `projects` | yes      | Full paths, e.g. `acme/api`, `group/subgroup/project`        |
+| `baseUrl`  | no       | Instance root, default `https://gitlab.com`. `/api/v4` is appended, so sub-path installs (`https://host/gitlab`) work |
+
+- Deployments: GitLab.com and self-managed.
+- Token: personal, group or project access token with the **`read_api`**
+  scope (Reporter role or higher on the projects), sent as `PRIVATE-TOKEN`.
+  Default variable `GITLAB_TOKEN`.
+- Data: `GET /projects/:path/repository/commits` on the default branch, with
+  `since`/`until`. Commits are counted by `committed_date` inside the exact
+  period. GitLab commits carry no account ID, so authors are identified by
+  email. A project with an empty repository or no default branch reports no
+  commits rather than an error. `--repo` narrows the queried projects.
+- Page cap: 50 pages (5,000 commits) per project and period.
+- Health: `GET /user` plus each project.
+
+### Jira (Cloud)
+
+| Option      | Required | Notes                                                     |
+| ----------- | -------- | --------------------------------------------------------- |
+| `baseUrl`   | yes      | Site root, e.g. `https://your-site.atlassian.net`         |
+| `email`     | yes      | Atlassian account email used for authentication           |
+| `projects`  | yes      | Project keys, e.g. `[ENG, OPS]`                           |
+| `jql`       | no       | Extra JQL clause, combined with `AND` (file only)         |
+| `statusMap` | no       | Status overrides (file only)                              |
+
+- Deployments: Jira Cloud only (Data Center/Server is not supported).
+- Token: an API token created at
+  <https://id.atlassian.com/manage-profile/security/api-tokens> for the
+  account in `email`, sent as Basic auth. The account needs **Browse
+  projects** on each project. Default variable `JIRA_API_TOKEN`.
+- Data: enhanced search `GET /rest/api/3/search/jql` with `nextPageToken`
+  pagination, requesting only `assignee`, `status`, `statuscategorychangedate`
+  and `updated`. JQL dates use the Jira user's timezone, so the query window
+  is widened by a day and the exact UTC period is re-checked locally.
+- **"Status last changed" approximation:** an issue counts when its *status
+  category* last changed inside the period (`statuscategorychangedate`,
+  falling back to `updated`). Moves inside one category (e.g. In Progress to
+  In Review) don't update that date, so such an issue counts only if its
+  category also changed in the period. Per-issue changelogs are not fetched.
+- Unassigned issues are excluded and counted in the notes.
+- Page cap: 100 pages (10,000 issues); add `jql` to narrow larger projects.
+- Health: `GET /rest/api/3/myself` plus each project.
+
+Default Jira mapping: Done, Closed, Resolved → completed; In Progress,
+In Development → in_progress; In Review, Code Review, QA, Testing →
+in_review.
+
+### OpenProject
+
+| Option      | Required | Notes                                                   |
+| ----------- | -------- | ------------------------------------------------------- |
+| `baseUrl`   | yes      | Instance root; `/api/v3` is appended                    |
+| `projects`  | yes      | Project identifiers (e.g. `website`) or numeric IDs     |
+| `statusMap` | no       | Status overrides (file only)                            |
+
+- Deployments: self-hosted and OpenProject cloud.
+- Token: create an API token under *My account → Access tokens*. It's sent as
+  Basic auth with user `apikey`. The user needs **View work packages** on
+  each project. Default variable `OPENPROJECT_API_KEY`.
+- Data: `GET /api/v3/projects/{id}/work_packages` filtered on `updatedAt`
+  (`<>d`, widened by a day and re-checked locally), paged by page number
+  (`offset`).
+- **"Status last changed" approximation:** work packages expose no status
+  change date, so a work package counts when it was **last updated** inside
+  the period, bucketed by its current status. A later edit moves it out of
+  the period.
+- Work packages without an assignee, or assigned to a group or placeholder
+  user, are excluded and counted in the notes.
+- Page cap: 100 pages per project.
+- Health: `GET /api/v3/users/me` plus each project.
+
+Default OpenProject mapping: Closed, Resolved → completed; In progress →
+in_progress; Developed, In testing, Tested, In review → in_review. Rejected,
+On hold and the planning statuses (New, Specified, …) are unmapped.
+
+### Example: all four live providers
+
+```bash
+export GITHUB_TOKEN=... GITLAB_TOKEN=... JIRA_API_TOKEN=... OPENPROJECT_API_KEY=...
+devzy providers add --type github --mode live --id gh --repo acme/api
+devzy providers add --type gitlab --mode live --id gl --project acme/infra
+devzy providers add --type jira --mode live --id jira \
+  --base-url https://acme.atlassian.net --account-email you@example.com --project ENG
+devzy providers add --type openproject --mode live --id op \
+  --base-url https://openproject.example.com --project website
+devzy health
+devzy pm git --dt-since 2026-01-01 --dt-to 2026-01-31
+devzy pm tasks --provider jira --status completed
+devzy pm all --email you@example.com
+```
+
+Troubleshooting:
+
+- `Missing credentials`: the token variable isn't set, or several live
+  providers of one type exist and each needs `credentials.tokenEnv`.
+- `HTTP 401`: wrong token, or for Jira, a token that doesn't belong to
+  `email`.
+- `HTTP 403` / `404` on a project: the account lacks access, or the path, key
+  or identifier is wrong. `devzy health` checks every configured project.
+- A person appears twice in `pm all`: their task-tracker account has no
+  visible email. Add an `identities[].accounts` entry.
 
 ## Installation
 
@@ -109,7 +261,7 @@ src/
 │   ├── identity-resolver.ts
 │   ├── ranking.ts
 │   ├── health.ts
-│   └── providers/          registry, interfaces, GitHub live adapter, mock adapters
+│   └── providers/          registry, interfaces, shared HTTP client, live and mock adapters
 ├── lib/                    table rendering, logger, redaction, prompts, errors
 └── tests/{unit,integration}
 ```
@@ -188,8 +340,8 @@ Columns:
 What gets counted:
 
 - **Commits** are counted per (repository, contributor) by the provider and
-  summed. Live GitHub counts commits whose committer date is in the period,
-  which is the date GitHub filters on.
+  summed. Live GitHub and GitLab count commits whose committer date is in the
+  period.
 - **Tasks** are counted when their status last changed within the period.
   Vendor statuses are normalized into `completed`, `in_progress` and
   `in_review`:
@@ -200,8 +352,9 @@ What gets counted:
   | In Progress, In Development               | In Progress   | `in_progress` |
   | In Review, Code Review, QA, Testing       | In Review     | `in_review`   |
 
-  Matching is case-insensitive. Any other status (e.g. Blocked, Backlog,
-  Canceled) is **unmapped**. Unmapped tasks are excluded from every column,
+  Matching is case-insensitive. Live Jira and OpenProject providers can extend
+  these tables with `options.statusMap` (see [Live providers](#live-providers)).
+  Any other status (e.g. Blocked, Backlog, Canceled) is **unmapped**. Unmapped tasks are excluded from every column,
   never counted as completed, and listed in the report notes.
 
 If no rows match, the report prints a message such as
@@ -228,7 +381,9 @@ Interactive when stdin is a terminal:
    nothing is saved.
 3. Asks for the mode (when there is a choice), ID, display name, and only the
    fields that adapter needs. Mock adapters ask for **no** credentials. Live
-   GitHub asks for repositories, API URL and the **name** of the token's
+   adapters ask for their options (GitHub: repositories and API URL; GitLab:
+   projects and URL; Jira: site URL, account email and project keys;
+   OpenProject: URL and projects) and the **name** of the token's
    environment variable.
 4. Validates every value, shows a summary and asks for confirmation.
 5. Appends the entry without touching other entries, settings or comments,
@@ -245,12 +400,19 @@ reported:
 devzy providers add --type jira --mode mock --id jira-demo
 devzy providers add --type github --mode live --id github-acme \
   --repo acme/api --repo acme/web --token-env GITHUB_TOKEN
+devzy providers add --type gitlab --mode live --id gitlab --project acme/infra
+devzy providers add --type jira --mode live --id jira --base-url https://acme.atlassian.net \
+  --account-email you@example.com --project ENG
+devzy providers add --type openproject --mode live --id op \
+  --base-url https://openproject.example.com --project website
 devzy providers add --type linear --mode mock --id linear --scope project   # writes ./devzy.yaml
 ```
 
-Options: `--name`, `--disabled`, `--base-url` (GitHub Enterprise), `--scope
-user|project`, `-y/--yes` (skip confirmation). Tokens are never written by this
-command.
+Options: `--name`, `--disabled`, `--repo` (GitHub), `--project` (GitLab, Jira,
+OpenProject; repeatable), `--base-url`, `--account-email` (Jira),
+`--token-env`, `--scope user|project`, `-y/--yes` (skip confirmation). A flag
+that doesn't apply to the chosen adapter is an error. `statusMap` and `jql`
+are set in the file only. Tokens are never written by this command.
 
 ### `devzy health show`
 
@@ -272,8 +434,9 @@ blocks the others. Columns: Provider, Name, Category, Mode, Status, Message.
 | `not_supported` | The adapter does not implement health checks               |
 | `not_checked`   | The provider is disabled                                   |
 
-The live GitHub check calls `GET /user` and `GET /repos/{owner}/{repo}` for
-each configured repository. Mock checks are simulated and say so.
+Live checks authenticate and then confirm access to every configured
+repository or project (see [Live providers](#live-providers)). Mock checks are
+simulated and say so.
 
 **Exit code:** `0` if no check is `unhealthy`, `timeout` or `error`; `3`
 otherwise.
@@ -444,6 +607,9 @@ Options by adapter:
 - **github (live)**: `repositories` (required, `owner/name`), `baseUrl`
   (default `https://api.github.com`; set it to `https://host/api/v3` for
   GitHub Enterprise Server).
+- **gitlab (live)**: `projects` (required), `baseUrl` (default `https://gitlab.com`).
+- **jira (live)**: `baseUrl`, `email`, `projects` (required), `jql`, `statusMap`.
+- **openproject (live)**: `baseUrl`, `projects` (required), `statusMap`.
 - **mock adapters**: `health` (`healthy` | `unhealthy` | `timeout` | `error`),
   `failReports` (`true` simulates a failing provider). Mock Git adapters also
   accept `repositories` to rename the fixture repositories.
@@ -474,19 +640,23 @@ Comments and unrelated content are preserved.
 | `DEVZY_HEALTH_TIMEOUT_MS`   | Overrides `settings.healthTimeoutMs`                                |
 | `DEVZY_REQUEST_TIMEOUT_MS`  | Overrides `settings.requestTimeoutMs`                               |
 | `GITHUB_TOKEN`              | Token for a live GitHub provider. See the rules below               |
+| `GITLAB_TOKEN`              | Token for a live GitLab provider                                    |
+| `JIRA_API_TOKEN`            | API token for a live Jira provider (with `options.email`)           |
+| `OPENPROJECT_API_KEY`       | API token for a live OpenProject provider                           |
 | *custom*                    | Any variable named by a provider's `credentials.tokenEnv`           |
 
 Token resolution for a live provider (first non-empty value wins):
 
 1. The variable named by `credentials.tokenEnv`.
-2. The type's conventional variable (`GITHUB_TOKEN`). This applies **only if
+2. The type's conventional variable (`GITHUB_TOKEN`, `GITLAB_TOKEN`,
+   `JIRA_API_TOKEN`, `OPENPROJECT_API_KEY`). This applies **only if
    `tokenEnv` is not set and this is the only live provider of that type**.
-   With several live GitHub providers, devzy does not guess; each one needs
-   its own `tokenEnv`.
+   With several live providers of one type, devzy does not guess; each one
+   needs its own `tokenEnv`.
 3. `credentials.token` from the file.
 
-`JIRA_API_KEY` and similar variables are not read, because no live Jira (or
-other) adapter exists yet.
+`JIRA_API_KEY` (an older naming) is not read; use `JIRA_API_TOKEN` or set
+`credentials.tokenEnv`.
 
 ## Mock and live modes
 
@@ -531,8 +701,9 @@ Provider failures in reports:
 ## Security notes
 
 - Tokens are only read from environment variables or the config file. They are
-  sent only to the configured API host: the GitHub adapter refuses to follow a
-  pagination link to another host.
+  sent only to the configured API host: live adapters refuse to follow a
+  pagination link to another host. Base URLs must be http(s) without embedded
+  credentials.
 - All output (stdout and stderr) goes through a redactor that removes every
   resolved token value, plus common token shapes (`ghp_…`, `github_pat_…`,
   `glpat-…`, `lin_api_…`, `Bearer …`).
@@ -542,12 +713,18 @@ Provider failures in reports:
 
 ## Known limitations
 
-- Only GitHub has a live adapter. GitLab, Jira and Linear are mock-only;
-  Bitbucket, ClickUp and OpenProject have no adapter.
-- Live GitHub reads the default branch's history (`GET /commits` without
-  `sha`). Commits only on other branches are not counted. More than 5,000
-  commits for one repository in one period is rejected rather than truncated.
-- Live GitHub requests repositories one at a time.
+- Live adapters exist for GitHub, GitLab, Jira Cloud and OpenProject. Linear
+  is mock-only; Bitbucket and ClickUp have no adapter, and OpenProject has no
+  mock adapter. Jira Data Center/Server is not supported.
+- Live GitHub and GitLab read the default branch only. Commits only on other
+  branches are not counted. More than 5,000 commits for one repository in one
+  period is rejected rather than truncated.
+- Live adapters request repositories and projects one at a time.
+- Jira counts status-*category* changes; OpenProject counts the last update.
+  See [Live providers](#live-providers) for what these approximations miss.
+- Jira and OpenProject usually hide emails, so `--email` needs
+  `identities[].accounts` mappings for their users.
+- The live adapters are tested only against stubbed HTTP responses.
 - Dates are UTC only; no configurable timezone.
 - No machine-readable (JSON) output yet.
 - Unmapped task-status counts are reported per provider, not per assignee.
@@ -570,7 +747,10 @@ Provider failures in reports:
 4. **Register**: add it to `BUILT_IN_ADAPTERS` in
    `src/services/providers/registry.ts`. Commands, aggregation, filters,
    `providers list/add` and `health` pick it up automatically.
-5. **Tests**: add adapter tests with an injected `fetch` (see
-   `src/tests/unit/github-live.test.ts`), covering pagination, error mapping
-   and that tokens never appear in errors.
-6. **Docs**: update the adapter table at the top of this README.
+5. **HTTP**: use `HttpClient` from `src/services/providers/http.ts` for
+   timeouts, bounded retries, same-origin checks and status-code errors (see
+   `gitlab.provider.ts`, `jira.provider.ts`, `openproject.provider.ts`).
+6. **Tests**: add adapter tests with an injected `fetch` (see
+   `src/tests/http-stub.ts` and `src/tests/unit/gitlab-live.test.ts`),
+   covering pagination, error mapping and that tokens never appear in errors.
+7. **Docs**: update the adapter table and the "Live providers" section.
