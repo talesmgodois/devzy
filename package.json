@@ -1,0 +1,34 @@
+{
+  "name": "devzy",
+  "version": "0.1.0",
+  "description": "Aggregate developer activity across Git and task providers.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "devzy": "./src/bin/devzy.ts"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "scripts": {
+    "dev": "bun run src/bin/devzy.ts",
+    "start": "bun run src/bin/devzy.ts",
+    "test": "bun test",
+    "test:unit": "bun test src/tests/unit",
+    "test:integration": "bun test src/tests/integration",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "check": "bun run typecheck && biome check . && bun test"
+  },
+  "dependencies": {
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.2",
+    "@types/bun": "1.3.10",
+    "typescript": "^7.0.2"
+  }
+}
