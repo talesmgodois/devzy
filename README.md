@@ -25,6 +25,7 @@ clearly labelled demo data.
 - [Security notes](#security-notes)
 - [Known limitations](#known-limitations)
 - [Adding a provider](#adding-a-provider)
+- [Contributing](CONTRIBUTING.md) · [Releasing](RELEASING.md)
 
 ## Capabilities
 
@@ -209,21 +210,58 @@ Troubleshooting:
 
 ## Installation
 
-Prerequisites: [Bun](https://bun.sh) **1.3.0 or later** (developed and tested with 1.3.10).
+Requires **Node.js 22 or later**. Bun is not needed to run devzy.
+
+```bash
+npm install -g devzy
+devzy --help
+
+# or without installing
+npx devzy --help
+```
+
+> The npm package has not been published yet; until the first release (see
+> [RELEASING.md](RELEASING.md)), install from source as below.
+
+Try it without any configuration: `devzy pm all` uses built-in mock data.
+
+### From source (Bun)
+
+Development uses [Bun](https://bun.sh) 1.3.10.
 
 ```bash
 git clone <repository-url> devzy
 cd devzy
-bun install
+bun install --frozen-lockfile
+bun run dev -- help              # run from source with Bun
 
-# Run from the checkout
-bun run src/bin/devzy.ts help
-bun run dev -- pm all            # same, via the "dev" script
-
-# Optional: put `devzy` on your PATH
-bun link
-devzy help
+bun run build                    # or build the Node.js executable
+node dist/devzy.js --help
 ```
+
+### Credentials and `.env` files
+
+devzy reads tokens from environment variables (see
+[Environment variables](#environment-variables)). Where they come from
+depends on how you run it:
+
+- **Installed from npm (Node.js):** `.env` files are **not** loaded. Export
+  the variables in your shell, or load a file explicitly:
+  `node --env-file=.env "$(command -v devzy)" pm all`.
+- **From source with Bun:** Bun loads `.env`, `.env.local` and
+  `.env.<NODE_ENV>` from the current directory automatically. Variables
+  already set in the shell take precedence.
+
+devzy never loads `.env` files itself. Loading them from whatever directory
+you run it in could pick up unrelated secrets.
+
+### Troubleshooting installation
+
+| Symptom                                                    | Fix                                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------- |
+| `devzy: command not found` after `npm install -g`          | Add npm's global bin directory to `PATH` (`npm prefix -g`, then its `bin/`) |
+| `npm WARN EBADENGINE` or `SyntaxError` / `TypeError` at start | Upgrade to Node.js 22+ (`node --version`)                          |
+| Tokens from `.env` are ignored                             | Expected under Node; see [Credentials and `.env` files](#credentials-and-env-files) |
 
 ## Development
 
@@ -237,7 +275,16 @@ devzy help
 | `bun run lint`             | Lint with Biome                                  |
 | `bun run format`           | Format with Biome (write)                        |
 | `bun run format:check`     | Check formatting                                 |
-| `bun run check`            | Type check + Biome (lint, format, imports) + tests |
+| `bun run build`            | Build `dist/devzy.js` (Node.js ESM, `#!/usr/bin/env node`) |
+| `bun run pack:check`       | Build and verify the npm tarball contents        |
+| `bun run smoke`            | Install the packed tarball and run it with Node 22+ |
+| `bun run check`            | Everything CI runs: types, Biome, tests, package, smoke |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions and
+[RELEASING.md](RELEASING.md) for the release process. CI
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same checks
+on pull requests and `main`, and smoke-tests the package on Node 22 and 24,
+Linux, macOS and Windows.
 
 Tests never use the network or real credentials. Configuration tests use
 temporary directories and pass an isolated environment explicitly, so
@@ -728,8 +775,8 @@ Provider failures in reports:
 - Dates are UTC only; no configurable timezone.
 - No machine-readable (JSON) output yet.
 - Unmapped task-status counts are reported per provider, not per assignee.
-- Table width uses `Bun.stringWidth`; very narrow terminals truncate the name
-  and provider columns.
+- Very narrow terminals truncate the name and provider columns.
+- Configuration file permissions (`0600`/`0700`) are best-effort on Windows.
 
 ## Adding a provider
 

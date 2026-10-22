@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in devzy does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Remove tokens, emails and private project names before posting.** devzy redacts
+        tokens in its own output, but check anything you paste.
+  - type: input
+    id: version
+    attributes:
+      label: devzy version
+      description: Output of `devzy --version`.
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime and OS
+      description: e.g. Node 22.14.0 on Ubuntu 24.04, or Bun 1.3.10 from source.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command you ran.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output and exit code
+      description: stdout/stderr (redacted) and the exit code (`echo $?`).
+      render: text
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration (redacted)
+      description: Provider type and mode, options. Never include tokens.
+      render: yaml
