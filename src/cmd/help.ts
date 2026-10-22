@@ -1,8 +1,10 @@
+import { version as packageVersion } from "../../package.json" with { type: "json" };
 import { DEFAULT_SORT_KEY, SORT_KEYS_BY_REPORT } from "../domain/activity.ts";
 import { FILTER_DEFINITIONS, type ReportKind } from "../domain/filters.ts";
 import { REPORTING_TIMEZONE } from "../domain/period.ts";
 
-export const VERSION = "0.1.0";
+/** Single source of truth: the version in package.json (inlined by the build). */
+export const VERSION: string = packageVersion;
 
 const GLOBAL_OPTIONS = `Global options:
   -h, --help            Show help for a command

@@ -1,3 +1,5 @@
+import stringWidth from "string-width";
+
 export interface Column {
   header: string;
   align?: "left" | "right";
@@ -14,8 +16,9 @@ const GAP = "  ";
 const ELLIPSIS = "…";
 const MIN_FLEX_WIDTH = 6;
 
+/** Terminal column width (wide CJK/emoji characters count as 2, ANSI codes as 0). */
 export function displayWidth(text: string): number {
-  return Bun.stringWidth(text);
+  return stringWidth(text);
 }
 
 export function truncate(text: string, width: number): string {

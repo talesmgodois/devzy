@@ -1,28 +1,48 @@
 {
   "name": "devzy",
   "version": "0.1.0",
-  "description": "Aggregate developer activity across Git and task providers.",
+  "description": "CLI that aggregates developer activity (commits and task status) across GitHub, GitLab, Jira and OpenProject.",
+  "keywords": [
+    "cli",
+    "developer-activity",
+    "engineering-metrics",
+    "github",
+    "gitlab",
+    "jira",
+    "openproject",
+    "commits",
+    "reporting"
+  ],
   "type": "module",
-  "private": true,
   "bin": {
-    "devzy": "./src/bin/devzy.ts"
+    "devzy": "dist/devzy.js"
   },
+  "files": [
+    "dist/",
+    "devzy.example.yaml"
+  ],
   "engines": {
-    "bun": ">=1.3.0"
+    "node": ">=22"
   },
+  "packageManager": "bun@1.3.10",
   "scripts": {
     "dev": "bun run src/bin/devzy.ts",
     "start": "bun run src/bin/devzy.ts",
+    "build": "bun scripts/build.ts",
     "test": "bun test",
     "test:unit": "bun test src/tests/unit",
     "test:integration": "bun test src/tests/integration",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "biome lint .",
+    "lint": "biome check --formatter-enabled=false .",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "check": "bun run typecheck && biome check . && bun test"
+    "pack:check": "bun run build && bun scripts/pack-check.ts",
+    "smoke": "bun run build && bun scripts/smoke.ts",
+    "check": "bun run typecheck && biome check . && bun test && bun run pack:check && bun scripts/smoke.ts",
+    "prepack": "bun run build"
   },
   "dependencies": {
+    "string-width": "^8.3.0",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },

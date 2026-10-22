@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { FetchLike } from "../../services/providers/adapter.ts";
 import {
   apiBase,
   basicAuth,
@@ -9,7 +10,6 @@ import {
   parseTimestamp,
   retryAfterMs,
 } from "../../services/providers/http.ts";
-import type { FetchLike } from "../../services/providers/adapter.ts";
 import { recordingSleep, status, stubFetch } from "../http-stub.ts";
 
 const client = (fetch: FetchLike, sleep = recordingSleep().sleep) =>

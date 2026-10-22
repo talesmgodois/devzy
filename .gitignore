@@ -36,3 +36,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # devzy: personal/project configuration may hold tokens; only the example is committed
 devzy.yaml
 !devzy.example.yaml
+
+# packed tarballs from CI/local packing
+/package/

@@ -5,7 +5,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["src/**", "*.json", "!__ai"]
+    "includes": ["src/**", "scripts/**", "*.json", "!__ai", "!dist"]
   },
   "formatter": {
     "enabled": true,

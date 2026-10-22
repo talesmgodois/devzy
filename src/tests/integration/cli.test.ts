@@ -1,7 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isolatedEnv, makeTempDir, SEPTEMBER, spawnCli, writeText } from "../helpers.ts";
+
+// These tests spawn the CLI several times each; 5 s is too tight on busy machines and CI runners.
+setDefaultTimeout(30_000);
 
 let dir: string;
 let cleanup: () => Promise<void>;
@@ -62,7 +65,10 @@ describe("help routes", () => {
   });
 
   test("--version", async () => {
-    expect((await cli(["--version"])).stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    const pkg = (await Bun.file(join(import.meta.dir, "../../../package.json")).json()) as {
+      version: string;
+    };
+    expect((await cli(["--version"])).stdout.trim()).toBe(pkg.version);
   });
 });
 

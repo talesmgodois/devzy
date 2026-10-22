@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Logger } from "../../lib/logger.ts";
 import { REDACTED, Redactor } from "../../lib/redact.ts";
-import { formatCount, renderTable, truncate } from "../../lib/table.ts";
+import { displayWidth, formatCount, renderTable, truncate } from "../../lib/table.ts";
 
 describe("Redactor", () => {
   test("removes registered secrets and known token shapes", () => {
@@ -67,6 +67,18 @@ describe("renderTable", () => {
     for (const line of text.split("\n")) expect(line.length).toBeLessThanOrEqual(20);
     expect(text).toContain("…");
     expect(text).toContain("1234");
+  });
+
+  test("aligns wide (CJK/emoji) characters by display width", () => {
+    const text = renderTable(columns, [
+      ["王小明", "1"],
+      ["Ana 🚀", "22"],
+    ]);
+    // Every line ends at the same terminal column when widths are measured correctly.
+    expect(new Set(text.split("\n").map(displayWidth)).size).toBe(1);
+    expect(text.split("\n")[2]).toBe("王小明      1");
+    expect(displayWidth("王小明")).toBe(6);
+    expect(displayWidth("\u001b[31mred\u001b[0m")).toBe(3);
   });
 
   test("helpers", () => {
