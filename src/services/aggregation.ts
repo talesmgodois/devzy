@@ -307,6 +307,11 @@ export class ActivityService {
         addCounts(row.counts, counts);
         row.providers = addSorted(row.providers, providerId);
       }
+      for (const excluded of outcome.data.excluded ?? []) {
+        if (excluded.count > 0) {
+          notes.add(`${providerId}: excluded ${excluded.count} task(s) ${excluded.reason}.`);
+        }
+      }
       if (outcome.data.unmappedStatuses.length > 0) {
         const total = outcome.data.unmappedStatuses.reduce((sum, s) => sum + s.count, 0);
         const detail = outcome.data.unmappedStatuses

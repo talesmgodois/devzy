@@ -45,3 +45,13 @@ describe("task status normalization", () => {
     ]);
   });
 });
+
+describe("mergeStatusMaps", () => {
+  test("later tables win case-insensitively", async () => {
+    const { mergeStatusMaps } = await import("../../domain/tasks.ts");
+    const merged = mergeStatusMaps(JIRA_STATUS_MAP, { done: "in_review", Blocked: "in_progress" });
+    expect(normalizeTaskStatus("Done", merged)).toBe("in_review");
+    expect(normalizeTaskStatus("BLOCKED", merged)).toBe("in_progress");
+    expect(normalizeTaskStatus("Closed", merged)).toBe("completed");
+  });
+});

@@ -8,14 +8,19 @@ export type Provider = GitProvider | TaskProvider;
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
+/** `providers add` flags that adapters may declare as setup fields. */
+export const SETUP_FLAGS = ["repo", "project", "base-url", "account-email"] as const;
+export type SetupFlag = (typeof SETUP_FLAGS)[number];
+
 /** A non-secret option collected by `devzy providers add`. */
 export interface SetupField {
   /** Key inside the provider entry's `options`. */
   key: string;
   /** CLI flag used to supply the value non-interactively. */
-  flag: "repo" | "base-url";
+  flag: SetupFlag;
   label: string;
-  kind: "list" | "url";
+  /** `list`: repeatable flag / comma-separated answer; `url` and `string`: one value. */
+  kind: "list" | "url" | "string";
   required: boolean;
   default?: string;
 }

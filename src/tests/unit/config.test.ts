@@ -194,7 +194,7 @@ describe("loadConfig", () => {
   test("not-implemented modes are accepted by the loader (reported later, not ignored)", async () => {
     await writeText(
       userPath(),
-      `providers:\n  - id: gl\n    type: gitlab\n    name: GL\n    mode: live\n`,
+      `providers:\n  - id: lin\n    type: linear\n    name: Lin\n    mode: live\n`,
     );
     const loaded = await load();
     expect(registry.implementationStatus(loaded.config.providers[0] as never)).toBe(

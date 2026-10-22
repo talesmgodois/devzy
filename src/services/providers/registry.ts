@@ -5,10 +5,13 @@ import { formatIssues } from "../config/schema.ts";
 import type { AdapterDefinition, FetchLike, Provider } from "./adapter.ts";
 import { PROVIDER_TYPES, type ProviderTypeId } from "./catalog.ts";
 import { githubLiveAdapter } from "./git/github.provider.ts";
+import { gitlabLiveAdapter } from "./git/gitlab.provider.ts";
 import { githubMockAdapter } from "./git/mock/github.mock.ts";
 import { gitlabMockAdapter } from "./git/mock/gitlab.mock.ts";
+import { jiraLiveAdapter } from "./tasks/jira.provider.ts";
 import { jiraMockAdapter } from "./tasks/mock/jira.mock.ts";
 import { linearMockAdapter } from "./tasks/mock/linear.mock.ts";
+import { openprojectLiveAdapter } from "./tasks/openproject.provider.ts";
 
 export interface ProviderTypeInfo {
   type: ProviderTypeId;
@@ -37,9 +40,10 @@ export type AdapterTable = Partial<
 /** Adapters shipped in this build. Types without an entry are known but not implemented. */
 export const BUILT_IN_ADAPTERS: AdapterTable = {
   github: { mock: githubMockAdapter, live: githubLiveAdapter },
-  gitlab: { mock: gitlabMockAdapter },
-  jira: { mock: jiraMockAdapter },
+  gitlab: { mock: gitlabMockAdapter, live: gitlabLiveAdapter },
+  jira: { mock: jiraMockAdapter, live: jiraLiveAdapter },
   linear: { mock: linearMockAdapter },
+  openproject: { live: openprojectLiveAdapter },
 };
 
 /**

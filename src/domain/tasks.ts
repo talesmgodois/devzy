@@ -32,9 +32,18 @@ export interface UnmappedStatusCount {
   count: number;
 }
 
+/** Tasks left out for a reason other than their status (e.g. no assignee). */
+export interface ExcludedTaskCount {
+  /** Completes "excluded N task(s) …", e.g. "without an assignee". */
+  reason: string;
+  count: number;
+}
+
 export interface TaskStatsResult {
   users: UserTaskStats[];
   unmappedStatuses: UnmappedStatusCount[];
+  /** Optional: adapters that drop tasks before normalization report them here. */
+  excluded?: ExcludedTaskCount[];
 }
 
 /**
@@ -43,6 +52,19 @@ export interface TaskStatsResult {
  * excluded, never silently counted as completed (or anything else).
  */
 export type StatusMapping = Readonly<Record<string, TaskStatus>>;
+
+/**
+ * Merges status tables case-insensitively; later tables win. Keys are stored
+ * lowercased, so an override such as `{ "done": … }` replaces a default `Done`.
+ */
+export function mergeStatusMaps(...tables: (StatusMapping | undefined)[]): StatusMapping {
+  const merged: Record<string, TaskStatus> = {};
+  for (const table of tables) {
+    for (const [vendor, bucket] of Object.entries(table ?? {}))
+      merged[vendor.trim().toLowerCase()] = bucket;
+  }
+  return merged;
+}
 
 export function normalizeTaskStatus(raw: string, mapping: StatusMapping): TaskStatus | undefined {
   const key = raw.trim().toLowerCase();
