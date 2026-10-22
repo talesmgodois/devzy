@@ -1,0 +1,65 @@
+# devzy example configuration. Placeholder values only: never put real tokens here.
+#
+# Copy to ~/.config/devzy/config.yaml (user) or ./devzy.yaml (project), or point
+# DEVZY_CONFIG_PATH at it. See README.md ("Configuration") for merge rules.
+version: 1
+
+settings:
+  # Length of the default reporting period, ending today (UTC). Env: DEVZY_DEFAULT_PERIOD_DAYS
+  defaultPeriodDays: 30
+  # Per-provider health-check timeout. Env: DEVZY_HEALTH_TIMEOUT_MS. CLI: devzy health --timeout
+  healthTimeoutMs: 5000
+  # Per-request timeout for live adapters. Env: DEVZY_REQUEST_TIMEOUT_MS
+  requestTimeoutMs: 15000
+
+providers:
+  # Mock providers: deterministic demo data, no credentials.
+  - id: github-mock
+    type: github
+    name: GitHub (mock)
+    enabled: true
+    mode: mock
+    options:
+      # Optional: rename the fixture repositories.
+      repositories: [example-org/api, example-org/web]
+
+  - id: jira-mock
+    type: jira
+    name: Jira (mock)
+    enabled: true
+    mode: mock
+    # Mock-only switches for trying failure handling:
+    # options: { health: unhealthy | timeout | error, failReports: true }
+
+  - id: linear-mock
+    type: linear
+    name: Linear (mock)
+    enabled: true
+    mode: mock
+
+  # Live GitHub (real REST API). Disabled here because reports refuse to mix
+  # mock and live providers unless --allow-mixed-modes is passed.
+  - id: github-live
+    type: github
+    name: GitHub (example-org)
+    enabled: false
+    mode: live
+    options:
+      repositories: [example-org/api]
+      # baseUrl: https://github.example.com/api/v3   # GitHub Enterprise Server
+    credentials:
+      # Name of the environment variable that holds the token (not the token itself).
+      tokenEnv: GITHUB_TOKEN
+
+# Explicit identity mappings used to combine contributors across providers.
+# Display names are never used for matching.
+identities:
+  - id: dev-one
+    name: Developer One
+    emails: [dev.one@example.com, dev1@users.noreply.github.com]
+    accounts:
+      # Provider instance ID + account ID (exact) or username (case-insensitive).
+      - provider: jira-mock
+        userId: "000000:00000000-0000-0000-0000-000000000000"
+      - provider: github-live
+        username: dev-one
