@@ -403,7 +403,11 @@ describe("providers add (non-interactive)", () => {
         1,
         /no adapter for it.*Nothing was saved/,
       ],
-      [["--type", "jira", "--mode", "live", "--id", "j"], 1, /no live adapter.*Nothing was saved/],
+      [
+        ["--type", "linear", "--mode", "live", "--id", "l"],
+        1,
+        /no live adapter.*Nothing was saved/,
+      ],
       [["--type", "nope", "--mode", "mock", "--id", "x"], 2, /Unknown provider type "nope"/],
     ];
     for (const [args, code, pattern] of cases) {

@@ -12,7 +12,12 @@ import {
   providerEntrySchema,
 } from "../services/config/schema.ts";
 import { appendProviderToFile } from "../services/config/write.ts";
-import type { AdapterDefinition, SetupField } from "../services/providers/adapter.ts";
+import {
+  type AdapterDefinition,
+  SETUP_FLAGS,
+  type SetupField,
+  type SetupFlag,
+} from "../services/providers/adapter.ts";
 import type { ProviderTypeInfo } from "../services/providers/registry.ts";
 import { parseCommandArgs } from "./args.ts";
 import { type CommandContext, describeConfigSource } from "./context.ts";
@@ -108,7 +113,9 @@ const ADD_OPTION_SPEC = {
   id: { type: "string" },
   name: { type: "string" },
   repo: { type: "string", multiple: true },
+  project: { type: "string", multiple: true },
   "base-url": { type: "string" },
+  "account-email": { type: "string" },
   "token-env": { type: "string" },
   disabled: { type: "boolean" },
   scope: { type: "string" },
@@ -356,19 +363,22 @@ function suggestId(type: string, mode: ProviderMode, existing: ReadonlySet<strin
 
 type AddValues = ReturnType<typeof parseCommandArgs<typeof ADD_OPTION_SPEC>>;
 
+/** Values given for a setup flag, as a list (single-value flags yield one element). */
+function flagValues(v: AddValues, flag: SetupFlag): string[] | undefined {
+  const raw = v[flag];
+  if (raw === undefined) return undefined;
+  return (Array.isArray(raw) ? raw : [raw]).map((s) => s.trim());
+}
+
 function rejectInapplicableFlags(v: AddValues, adapter: AdapterDefinition): void {
   const flags = new Set(adapter.setupFields.map((f) => f.flag));
-  if (v.repo !== undefined && !flags.has("repo")) {
-    throw new UsageError(
-      `--repo does not apply to a ${adapter.mode} adapter of this type.`,
-      HELP_HINT,
-    );
-  }
-  if (v["base-url"] !== undefined && !flags.has("base-url")) {
-    throw new UsageError(
-      `--base-url does not apply to a ${adapter.mode} adapter of this type.`,
-      HELP_HINT,
-    );
+  for (const flag of SETUP_FLAGS) {
+    if (v[flag] !== undefined && !flags.has(flag)) {
+      throw new UsageError(
+        `--${flag} does not apply to a ${adapter.mode} adapter of this type.`,
+        HELP_HINT,
+      );
+    }
   }
   if (v["token-env"] !== undefined && !adapter.credential) {
     throw new UsageError("--token-env applies only to adapters that need a token.", HELP_HINT);
@@ -380,9 +390,9 @@ async function collectField(
   v: AddValues,
   prompter: Prompter | undefined,
 ): Promise<unknown> {
+  const given = flagValues(v, field.flag);
   if (field.kind === "list") {
-    const given = field.flag === "repo" ? v.repo : undefined;
-    if (given && given.length > 0) return given.map((s) => s.trim());
+    if (given && given.length > 0) return given;
     if (!prompter) return undefined;
     const answer = await prompter.ask(field.label, {
       default: field.default,
@@ -395,10 +405,12 @@ async function collectField(
       .filter(Boolean);
     return list.length > 0 ? list : undefined;
   }
-  const given = field.flag === "base-url" ? v["base-url"] : undefined;
-  if (given !== undefined) return given.trim();
+  if (given !== undefined) return given[0];
   if (!prompter) return field.default;
-  const answer = await prompter.ask(field.label, { default: field.default });
+  const answer = await prompter.ask(field.label, {
+    default: field.default,
+    validate: (a) => (field.required && !a.trim() ? "Required." : undefined),
+  });
   return answer.trim() || undefined;
 }
 

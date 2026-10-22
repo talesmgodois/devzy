@@ -155,8 +155,12 @@ Options:
   --id <id>              Unique instance ID (lowercase letters, digits, '-')
   --name <name>          Display name (default: derived from the type)
   --repo <owner/name>    Live GitHub: repository to report on (repeatable)
-  --base-url <url>       Live GitHub: API URL (default https://api.github.com)
-  --token-env <VAR>      Live GitHub: env variable holding the token (default GITHUB_TOKEN)
+  --project <ref>        Live GitLab: project path; live Jira: project key;
+                         live OpenProject: project identifier (repeatable)
+  --base-url <url>       Live adapters: API/site URL (GitHub and GitLab have defaults)
+  --account-email <addr> Live Jira: Atlassian account email used to authenticate
+  --token-env <VAR>      Live adapters: env variable holding the token (defaults:
+                         GITHUB_TOKEN, GITLAB_TOKEN, JIRA_API_TOKEN, OPENPROJECT_API_KEY)
   --disabled             Save the provider as disabled
   --scope <user|project> File to write: user (~/.config/devzy/config.yaml, default)
                          or project (./devzy.yaml). When DEVZY_CONFIG_PATH is
@@ -166,9 +170,17 @@ Options:
 Tokens are never written by this command; only the name of the environment
 variable that holds the token is saved.
 
-Non-interactive example:
+Non-interactive examples:
   devzy providers add --type github --mode live --id github-acme \\
     --repo acme/api --repo acme/web --token-env GITHUB_TOKEN
+  devzy providers add --type gitlab --mode live --id gitlab-acme --project acme/infra
+  devzy providers add --type jira --mode live --id jira-acme \\
+    --base-url https://acme.atlassian.net --account-email me@example.com --project ENG
+  devzy providers add --type openproject --mode live --id op \\
+    --base-url https://openproject.example.com --project website
+
+Status mappings (options.statusMap) and Jira's options.jql are set in the
+configuration file only.
 
 ${GLOBAL_OPTIONS}`;
 
