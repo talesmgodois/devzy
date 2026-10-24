@@ -9,6 +9,10 @@ describe("task status normalization", () => {
     ["  In Progress ", "in_progress"],
     ["QA", "in_review"],
     ["code review", "in_review"],
+    ["In Code Review", "in_review"],
+    ["IN CODE REVIEW", "in_review"],
+    ["Ready for Test", "in_review"],
+    ["In Test", "in_review"],
   ])("jira %p -> %p", (raw, bucket) => {
     expect(normalizeTaskStatus(raw, JIRA_STATUS_MAP)).toBe(bucket as never);
   });
@@ -53,5 +57,13 @@ describe("mergeStatusMaps", () => {
     expect(normalizeTaskStatus("Done", merged)).toBe("in_review");
     expect(normalizeTaskStatus("BLOCKED", merged)).toBe("in_progress");
     expect(normalizeTaskStatus("Closed", merged)).toBe("completed");
+  });
+});
+
+describe("taskTotal", () => {
+  test("sums all buckets", async () => {
+    const { taskTotal } = await import("../../domain/tasks.ts");
+    expect(taskTotal({ completed: 3, in_progress: 2, in_review: 4 })).toBe(9);
+    expect(taskTotal({ completed: 0, in_progress: 0, in_review: 0 })).toBe(0);
   });
 });

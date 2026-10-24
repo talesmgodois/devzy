@@ -196,8 +196,8 @@ describe("live providers end to end (stubbed HTTP)", () => {
     const { fetch } = backend();
     const r = await cli(["pm", "tasks", ...RANGE], fetch);
     expect(r.code).toBe(0);
-    expect(rowOf(r.stdout, "Ana Souza")).toMatch(/mapped\s+1\s+0\s+1\s+jira-live/);
-    expect(rowOf(r.stdout, "Ben Carter")).toMatch(/mapped\s+1\s+1\s+0\s+op-live/);
+    expect(rowOf(r.stdout, "Ana Souza")).toMatch(/mapped\s+1\s+0\s+1\s+2\s+jira-live/);
+    expect(rowOf(r.stdout, "Ben Carter")).toMatch(/mapped\s+1\s+1\s+0\s+2\s+op-live/);
     expect(r.stdout).toContain("jira-live: excluded 1 task(s) without an assignee.");
   });
 
@@ -206,9 +206,9 @@ describe("live providers end to end (stubbed HTTP)", () => {
     const r = await cli(["pm", "all", ...RANGE], fetch);
     expect(r.code).toBe(0);
     expect(rowOf(r.stdout, "Ana Souza")).toMatch(
-      /mapped\s+4\s+1\s+0\s+1\s+gh-live, gl-live, jira-live/,
+      /mapped\s+4\s+1\s+0\s+1\s+2\s+gh-live, gl-live, jira-live/,
     );
-    expect(rowOf(r.stdout, "Ben Carter")).toMatch(/mapped\s+1\s+1\s+1\s+0\s+gh-live, op-live/);
+    expect(rowOf(r.stdout, "Ben Carter")).toMatch(/mapped\s+1\s+1\s+1\s+0\s+2\s+gh-live, op-live/);
     expect(r.stdout.split("\n").filter((l) => l.includes("Ana"))).toHaveLength(1);
   });
 
@@ -223,8 +223,8 @@ describe("live providers end to end (stubbed HTTP)", () => {
     expect(calls.every((c) => c.url.host === "gitlab.example.com")).toBe(true);
 
     const tasks = await cli(["pm", "tasks", ...RANGE, "--status", "completed"], fetch);
-    expect(rowOf(tasks.stdout, "Ben Carter")).toMatch(/mapped\s+1\s+-\s+-\s+op-live/);
-    expect(rowOf(tasks.stdout, "Ana Souza")).toMatch(/mapped\s+1\s+-\s+-\s+jira-live/);
+    expect(rowOf(tasks.stdout, "Ben Carter")).toMatch(/mapped\s+1\s+-\s+-\s+1\s+op-live/);
+    expect(rowOf(tasks.stdout, "Ana Souza")).toMatch(/mapped\s+1\s+-\s+-\s+1\s+jira-live/);
   });
 
   test("a failing live provider makes the report partial, never zero", async () => {

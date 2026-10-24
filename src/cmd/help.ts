@@ -78,8 +78,9 @@ Examples:
   tasks: `Usage: devzy pm tasks [options]
 
 Normalized task activity per contributor across enabled task providers.
-Columns: Completed, In progress, In review / testing. Vendor statuses that map
-to none of these are excluded and listed in the notes.
+Columns: Completed, In progress, In review / testing, and Total (their sum;
+only the selected statuses with --status). Vendor statuses that map to none
+of these are excluded and listed in the notes.
 
 ${reportOptionLines("tasks")}
 

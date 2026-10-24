@@ -166,6 +166,19 @@ describe("reports in mock mode (fresh install, no config)", () => {
     );
   });
 
+  test("Total column sums the task buckets", async () => {
+    const r = await cli(["pm", "tasks", ...SEPTEMBER]);
+    expect(r.stdout).toMatch(/In review \/ testing\s+Total\s+Providers/);
+    for (const line of r.stdout.split("\n").filter((l) => /^\s*\d+\s/.test(l))) {
+      const [completed, inProgress, inReview, total] = (
+        line.match(/\s(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s/) ?? []
+      )
+        .slice(1)
+        .map(Number);
+      expect(total).toBe((completed ?? 0) + (inProgress ?? 0) + (inReview ?? 0));
+    }
+  });
+
   test("status filter shows '-' for buckets that were filtered out", async () => {
     const r = await cli(["pm", "tasks", ...SEPTEMBER, "--status", "completed"]);
     expect(r.code).toBe(0);

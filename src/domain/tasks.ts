@@ -16,6 +16,11 @@ export function isTaskStatus(value: string): value is TaskStatus {
 
 export type TaskCounts = Record<TaskStatus, number>;
 
+/** Sum of all buckets (with --status, unselected buckets are already zero). */
+export function taskTotal(counts: TaskCounts): number {
+  return TASK_STATUSES.reduce((sum, status) => sum + counts[status], 0);
+}
+
 export function emptyTaskCounts(): TaskCounts {
   return { completed: 0, in_progress: 0, in_review: 0 };
 }

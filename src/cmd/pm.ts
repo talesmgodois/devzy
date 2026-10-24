@@ -15,7 +15,7 @@ import {
   type ReportQuery,
 } from "../domain/filters.ts";
 import { PeriodError, periodFromDates, REPORTING_TIMEZONE } from "../domain/period.ts";
-import { TASK_STATUS_LABELS, TASK_STATUSES, type TaskCounts } from "../domain/tasks.ts";
+import { TASK_STATUS_LABELS, TASK_STATUSES, type TaskCounts, taskTotal } from "../domain/tasks.ts";
 import { DevzyError, ExitCode, type ExitCodeValue, UsageError } from "../lib/errors.ts";
 import { type Column, formatCount, renderTable } from "../lib/table.ts";
 import { ActivityService } from "../services/aggregation.ts";
@@ -186,17 +186,18 @@ const BASE_COLUMNS: Column[] = [
 
 function taskCells(counts: TaskCounts | undefined, report: ActivityReport): string[] {
   const selected = report.query.filters.statuses;
-  return TASK_STATUSES.map((status) => {
+  const cells = TASK_STATUSES.map((status) => {
     if (selected.length > 0 && !selected.includes(status)) return "-";
     return formatCount(counts?.[status]);
   });
+  return [...cells, formatCount(counts ? taskTotal(counts) : undefined)];
 }
 
 function tableFor(report: ActivityReport): { columns: Column[]; rows: string[][] } {
-  const taskColumns: Column[] = TASK_STATUSES.map((s) => ({
-    header: TASK_STATUS_LABELS[s],
-    align: "right",
-  }));
+  const taskColumns: Column[] = [
+    ...TASK_STATUSES.map((s): Column => ({ header: TASK_STATUS_LABELS[s], align: "right" })),
+    { header: "Total", align: "right" },
+  ];
   const providersColumn: Column = { header: "Providers", flex: true };
 
   if (report.kind === "git") {
