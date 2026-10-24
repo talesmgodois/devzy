@@ -25,6 +25,7 @@ clearly labelled demo data.
 - [Security notes](#security-notes)
 - [Known limitations](#known-limitations)
 - [Adding a provider](#adding-a-provider)
+- [Issues and license](#issues-and-license)
 - [Contributing](CONTRIBUTING.md) · [Releasing](RELEASING.md)
 
 ## Capabilities
@@ -227,8 +228,9 @@ devzy --help
 npx devzy --help
 ```
 
-> The npm package has not been published yet; until the first release (see
-> [RELEASING.md](RELEASING.md)), install from source as below.
+> If `npm install -g devzy` reports that the package doesn't exist, the first
+> release hasn't been published yet (see [RELEASING.md](RELEASING.md)).
+> Install from source as below.
 
 Try it without any configuration: `devzy pm all` uses built-in mock data.
 
@@ -237,7 +239,7 @@ Try it without any configuration: `devzy pm all` uses built-in mock data.
 Development uses [Bun](https://bun.sh) 1.3.10.
 
 ```bash
-git clone <repository-url> devzy
+git clone https://github.com/talesmgodois/devzy.git
 cd devzy
 bun install --frozen-lockfile
 bun run dev -- help              # run from source with Bun
@@ -810,3 +812,12 @@ Provider failures in reports:
    `src/tests/http-stub.ts` and `src/tests/unit/gitlab-live.test.ts`),
    covering pagination, error mapping and that tokens never appear in errors.
 7. **Docs**: update the adapter table and the "Live providers" section.
+
+## Issues and license
+
+Report bugs and request features at
+<https://github.com/talesmgodois/devzy/issues> (the bug template asks for
+the version, runtime and redacted output; never paste tokens). Contributions
+are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+devzy is released under the [MIT License](LICENSE).

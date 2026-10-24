@@ -32,32 +32,56 @@ published under the `next` dist-tag (`npm install -g devzy@next`).
 
 ## One-time setup (maintainer)
 
-These cannot be done from the code and **must be done before the first release**:
+Already done in the repository:
 
-1. **Fill in package metadata** in `package.json`: `license` (and add a
-   matching `LICENSE` file), `repository`
-   (`{ "type": "git", "url": "git+https://github.com/<owner>/devzy.git" }`),
-   and optionally `homepage` and `bugs`. The publish workflow refuses to run
-   without `license` and `repository`, because provenance and Trusted
-   Publishing depend on the repository URL.
-2. **Create the GitHub environment** `npm` (Settings → Environments). Add
-   required reviewers if releases should need manual approval.
-3. **Configure npm Trusted Publishing** on npmjs.com → package `devzy` →
+- `package.json` has `license: MIT` (with `LICENSE`), `repository`
+  (`github.com/talesmgodois/devzy`), `homepage`, `bugs` and `author`. The
+  publish workflow refuses to run without `license` and `repository`, because
+  provenance and Trusted Publishing depend on the repository URL.
+- The GitHub repository is public, so npm can attach provenance.
+
+Still to do, in your GitHub and npm accounts:
+
+1. **Create the GitHub environment** `npm` (repository Settings →
+   Environments → New environment) and add yourself as a required reviewer,
+   so every publish waits for your approval. GitHub would create the
+   environment automatically on the first run, but without that protection.
+2. **Make the package exist on npm.** npm configures Trusted Publishing from
+   the package's settings page, so a never-published name has nowhere to set
+   it. Publish the first version once by hand, from a clean checkout of `main`:
+
+   ```bash
+   nvm use 24                       # the smoke test needs Node 22+
+   npm login                        # account with 2FA enabled
+   bun install --frozen-lockfile && bun run check
+   bun scripts/release-check.ts v0.1.0
+   npm publish --access public      # prepack builds dist/devzy.js
+   git tag v0.1.0 && git push origin v0.1.0   # see below
+   ```
+
+   This first version has no provenance. Pushing the `v0.1.0` tag afterwards
+   runs the publish workflow, which **stops in `verify`** with "is already
+   published". That's expected and harmless; the tag simply marks the release
+   in git. Create its GitHub release by hand if you want one
+   (`gh release create v0.1.0 --generate-notes`). If npm does let you add a
+   trusted publisher before the first publish, skip this step and release
+   0.1.0 through the workflow instead.
+3. **Configure npm Trusted Publishing**: npmjs.com → package `devzy` →
    Settings → Trusted Publisher → GitHub Actions:
-   - Organization or user: `<owner>`
+   - Organization or user: `talesmgodois`
    - Repository: `devzy`
    - Workflow filename: `publish.yml`
    - Environment: `npm`
 
    A new trusted-publisher configuration must complete a successful publish
-   within 2 days or it expires and has to be recreated. If npm doesn't let
-   you add a trusted publisher before the package exists, publish the first
-   version once manually (`npm publish` from a clean `bun run check`ed
-   checkout, with 2FA), then configure the trusted publisher and use tags
-   from then on.
+   within 2 days, or it expires and has to be recreated. Configure it right
+   before the first CI release (step 5).
 4. **Restrict token publishing**: package Settings → Publishing access →
    "Require two-factor authentication and disallow tokens". Trusted
    Publishing keeps working because it uses OIDC.
+5. **First CI release**: follow [Release steps](#release-steps) with the
+   next version (e.g. `npm version patch` → `v0.1.1`). Its npm page should
+   show a provenance badge.
 
 Trusted Publishing requires npm ≥ 11.5.1 and Node ≥ 22.14; the workflow uses
 Node 24 and upgrades npm if needed.
