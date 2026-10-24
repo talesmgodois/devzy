@@ -14,8 +14,16 @@ export const JIRA_STATUS_MAP: StatusMapping = {
   "In Development": "in_progress",
   "In Review": "in_review",
   "Code Review": "in_review",
+  "In Code Review": "in_review",
+  "Ready for Review": "in_review",
+  "Peer Review": "in_review",
   QA: "in_review",
+  "In QA": "in_review",
   Testing: "in_review",
+  "In Test": "in_review",
+  "In Testing": "in_review",
+  "Ready for Test": "in_review",
+  "Ready for QA": "in_review",
 };
 
 export const LINEAR_STATUS_MAP: StatusMapping = {

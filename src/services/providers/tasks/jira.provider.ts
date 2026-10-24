@@ -23,10 +23,10 @@ import { JIRA_STATUS_MAP, statusMapSchema } from "./status-maps.ts";
 import type { TaskProvider, TaskStatsQuery } from "./task.interface.ts";
 
 const PROJECT_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{0,254}$/;
-/** 100 issues per page; more than this is rejected rather than truncated. */
-export const JIRA_MAX_PAGES = 100;
-const PAGE_SIZE = 100;
-const FIELDS = ["assignee", "status", "statuscategorychangedate", "updated"];
+/** 50 issues per page (each carries its changelog); more is rejected rather than truncated. */
+export const JIRA_MAX_PAGES = 200;
+const PAGE_SIZE = 50;
+const FIELDS = ["assignee", "status", "statuscategorychangedate", "updated", "created"];
 
 export const jiraLiveOptionsSchema = z.strictObject({
   /** Site root, e.g. https://your-site.atlassian.net */
@@ -57,8 +57,58 @@ const issueSchema = z.object({
     status: z.object({ name: z.string() }).nullish(),
     statuscategorychangedate: z.string().nullish(),
     updated: z.string().nullish(),
+    created: z.string().nullish(),
   }),
+  changelog: z
+    .object({
+      total: z.number().nullish(),
+      histories: z.array(
+        z.object({
+          created: z.string(),
+          items: z.array(z.object({ field: z.string().nullish(), fieldId: z.string().nullish() })),
+        }),
+      ),
+    })
+    .nullish(),
 });
+
+type JiraIssue = z.output<typeof issueSchema>;
+
+/**
+ * When the issue's status last changed, from the changelog returned by the
+ * search (`expand=changelog`, newest entries first, possibly truncated):
+ *
+ * 1. the newest history entry that changes `status`: exact;
+ * 2. a complete changelog with no status change: the issue still has the
+ *    status it was created with, so `created`;
+ * 3. a truncated changelog without a status change: the change is older than
+ *    the oldest returned entry, which is returned as an upper bound when it
+ *    precedes `periodStart` (so the issue is correctly excluded);
+ * 4. otherwise (no changelog, or 40+ newer non-status edits inside the
+ *    period): `statuscategorychangedate`, then `updated`.
+ */
+export function lastStatusChange(issue: JiraIssue, periodStart: Date): Date | undefined {
+  const { fields, changelog } = issue;
+  const fallback = () =>
+    parseTimestamp(fields.statuscategorychangedate) ?? parseTimestamp(fields.updated);
+  if (!changelog) return fallback();
+  let newestStatusChange: Date | undefined;
+  let oldestEntry: Date | undefined;
+  for (const history of changelog.histories) {
+    const at = parseTimestamp(history.created);
+    if (!at) continue;
+    if (!oldestEntry || at < oldestEntry) oldestEntry = at;
+    const changesStatus = history.items.some(
+      (item) => item.fieldId === "status" || item.field === "status",
+    );
+    if (changesStatus && (!newestStatusChange || at > newestStatusChange)) newestStatusChange = at;
+  }
+  if (newestStatusChange) return newestStatusChange;
+  const complete = (changelog.total ?? changelog.histories.length) <= changelog.histories.length;
+  if (complete) return parseTimestamp(fields.created) ?? fallback();
+  if (oldestEntry && oldestEntry < periodStart) return oldestEntry;
+  return fallback();
+}
 const searchSchema = z.object({
   issues: z.array(issueSchema),
   nextPageToken: z.string().nullish(),
@@ -85,11 +135,12 @@ function quoteJql(value: string): string {
 /**
  * Live Jira Cloud adapter (REST API v3, enhanced search `GET /rest/api/3/search/jql`).
  *
- * A task counts when its status category last changed inside the period
- * (`statuscategorychangedate`, falling back to `updated`), bucketed by its
- * current status. Category dates do not move for transitions within one
- * category (e.g. In Progress → In Review); per-issue changelogs are not
- * fetched. Unassigned issues are excluded and reported.
+ * A task counts when its status last changed inside the period, bucketed by
+ * its current status. The change time comes from the changelog embedded in
+ * the search results (`expand=changelog`), so transitions within one status
+ * category (e.g. In Progress → In Code Review) count too; no per-issue
+ * requests are made. See {@link lastStatusChange}. Unassigned issues are
+ * excluded and reported.
  */
 export class JiraLiveTaskProvider implements TaskProvider, HealthCheckable {
   readonly category = "tasks";
@@ -150,14 +201,14 @@ export class JiraLiveTaskProvider implements TaskProvider, HealthCheckable {
       const url = this.#http.url("search/jql");
       url.searchParams.set("jql", this.buildJql(query));
       url.searchParams.set("fields", FIELDS.join(","));
+      url.searchParams.set("expand", "changelog");
       url.searchParams.set("maxResults", String(PAGE_SIZE));
       if (token) url.searchParams.set("nextPageToken", token);
       const { data } = await this.#http.getJson(url, searchSchema, context);
 
       for (const issue of data.issues) {
         const { fields } = issue;
-        const changedAt =
-          parseTimestamp(fields.statuscategorychangedate) ?? parseTimestamp(fields.updated);
+        const changedAt = lastStatusChange(issue, query.period.since);
         if (!changedAt || !isWithinPeriod(changedAt, query.period)) continue;
         if (!fields.assignee) {
           unassigned += 1;

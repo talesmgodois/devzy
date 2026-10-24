@@ -7,6 +7,7 @@ import {
   JIRA_MAX_PAGES,
   JiraLiveTaskProvider,
   jiraLiveAdapter,
+  lastStatusChange,
 } from "../../services/providers/tasks/jira.provider.ts";
 import { JIRA_STATUS_MAP } from "../../services/providers/tasks/status-maps.ts";
 import { json, recordingSleep, status, stubFetch } from "../http-stub.ts";
@@ -70,8 +71,11 @@ describe("JiraLiveTaskProvider", () => {
     expect(url.searchParams.get("jql")).toBe(
       'project in ("ENG", "OPS") AND updated >= "2025-12-31" AND created < "2026-02-02" AND (labels = backend) ORDER BY key ASC',
     );
-    expect(url.searchParams.get("fields")).toBe("assignee,status,statuscategorychangedate,updated");
-    expect(url.searchParams.get("maxResults")).toBe("100");
+    expect(url.searchParams.get("fields")).toBe(
+      "assignee,status,statuscategorychangedate,updated,created",
+    );
+    expect(url.searchParams.get("expand")).toBe("changelog");
+    expect(url.searchParams.get("maxResults")).toBe("50");
     expect(calls[0]?.headers["Authorization"]).toBe(
       `Basic ${Buffer.from(`bot@example.com:${TOKEN}`).toString("base64")}`,
     );
@@ -151,7 +155,7 @@ describe("JiraLiveTaskProvider", () => {
     let n = 0;
     const endless = stubFetch(() => json({ issues: [], nextPageToken: `t${++n}`, isLast: false }));
     await expect(provider(endless.fetch).getUserTaskStats({ period })).rejects.toThrow(
-      `More than ${JIRA_MAX_PAGES * 100} Jira issues`,
+      `More than ${JIRA_MAX_PAGES * 50} Jira issues`,
     );
   });
 
@@ -230,5 +234,128 @@ describe("jiraLiveAdapter", () => {
     const p = jiraLiveAdapter.create({ ...ctx, token: TOKEN, fetch });
     if (p.category !== "tasks") throw new Error("expected a task provider");
     expect((await p.getUserTaskStats({ period })).users[0]?.counts.in_progress).toBe(1);
+  });
+});
+
+describe("lastStatusChange (changelog-based)", () => {
+  const since = new Date("2026-01-01T00:00:00Z");
+  const fields = {
+    statuscategorychangedate: "2025-11-01T00:00:00.000+0000",
+    updated: "2026-01-20T00:00:00.000+0000",
+    created: "2025-10-01T00:00:00.000+0000",
+  };
+  const history = (created: string, field: string) => ({
+    created,
+    items: [{ field, fieldId: field }],
+  });
+  const at = (d: Date | undefined) => d?.toISOString();
+
+  test("uses the newest status transition, even within one status category", () => {
+    const issue = {
+      fields,
+      changelog: {
+        total: 3,
+        histories: [
+          history("2026-01-15T10:00:00.000+0000", "assignee"),
+          history("2026-01-12T09:00:00.000+0000", "status"), // In Progress -> In Code Review
+          history("2025-11-01T00:00:00.000+0000", "status"), // To Do -> In Progress
+        ],
+      },
+    };
+    expect(at(lastStatusChange(issue, since))).toBe("2026-01-12T09:00:00.000Z");
+  });
+
+  test("complete changelog without a status change: the creation date", () => {
+    const issue = {
+      fields,
+      changelog: { total: 1, histories: [history("2026-01-15T10:00:00.000+0000", "summary")] },
+    };
+    expect(at(lastStatusChange(issue, since))).toBe("2025-10-01T00:00:00.000Z");
+  });
+
+  test("truncated changelog older than the period: excluded via the oldest entry", () => {
+    const issue = {
+      fields,
+      changelog: { total: 60, histories: [history("2025-12-20T00:00:00.000+0000", "summary")] },
+    };
+    const result = lastStatusChange(issue, since);
+    expect(result && result < since).toBe(true);
+  });
+
+  test("truncated changelog entirely inside the period, or no changelog: date-field fallback", () => {
+    const truncated = {
+      fields,
+      changelog: { total: 60, histories: [history("2026-01-10T00:00:00.000+0000", "summary")] },
+    };
+    expect(at(lastStatusChange(truncated, since))).toBe("2025-11-01T00:00:00.000Z");
+    expect(at(lastStatusChange({ fields }, since))).toBe("2025-11-01T00:00:00.000Z");
+    expect(
+      at(lastStatusChange({ fields: { ...fields, statuscategorychangedate: null } }, since)),
+    ).toBe("2026-01-20T00:00:00.000Z");
+  });
+});
+
+describe("JiraLiveTaskProvider with changelogs", () => {
+  test("counts a move into In Code Review inside the period even when the category date is older", async () => {
+    const { fetch } = stubFetch(() =>
+      json({
+        isLast: true,
+        issues: [
+          {
+            fields: {
+              assignee: ana,
+              status: { name: "In Code Review" },
+              statuscategorychangedate: "2025-12-01T00:00:00.000+0000",
+              updated: "2026-01-10T00:00:00.000+0000",
+              created: "2025-11-20T00:00:00.000+0000",
+            },
+            changelog: {
+              total: 2,
+              histories: [
+                {
+                  created: "2026-01-10T00:00:00.000+0000",
+                  items: [{ field: "status", fieldId: "status" }],
+                },
+                {
+                  created: "2025-12-01T00:00:00.000+0000",
+                  items: [{ field: "status", fieldId: "status" }],
+                },
+              ],
+            },
+          },
+          {
+            fields: {
+              assignee: dana,
+              status: { name: "Ready for Test" },
+              statuscategorychangedate: "2026-01-05T00:00:00.000+0000",
+              updated: "2026-01-25T00:00:00.000+0000",
+              created: "2025-11-20T00:00:00.000+0000",
+            },
+            // Edited in the period, but the status last changed before it.
+            changelog: {
+              total: 2,
+              histories: [
+                {
+                  created: "2026-01-25T00:00:00.000+0000",
+                  items: [{ field: "summary", fieldId: "summary" }],
+                },
+                {
+                  created: "2025-12-28T00:00:00.000+0000",
+                  items: [{ field: "status", fieldId: "status" }],
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    const result = await provider(fetch).getUserTaskStats({ period });
+    expect(result.users).toEqual([
+      {
+        assignee: { displayName: "Ana Souza", email: "ana@example.com", providerUserId: "acc-ana" },
+        counts: { completed: 0, in_progress: 0, in_review: 1 },
+      },
+    ]);
+    expect(result.unmappedStatuses).toEqual([]);
   });
 });
