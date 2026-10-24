@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { run } from "../cmd/index.ts";
 import { Redactor } from "../lib/redact.ts";
 
