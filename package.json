@@ -1,6 +1,6 @@
 {
   "name": "devzy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI that aggregates developer activity (commits and task status) across GitHub, GitLab, Jira and OpenProject.",
   "keywords": [
     "cli",
