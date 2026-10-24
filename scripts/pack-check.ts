@@ -9,8 +9,8 @@ import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
 
-const REQUIRED = ["package.json", "README.md", "dist/devzy.js"];
-const OPTIONAL = ["LICENSE", "devzy.example.yaml"];
+const REQUIRED = ["package.json", "README.md", "LICENSE", "dist/devzy.js"];
+const OPTIONAL = ["devzy.example.yaml"];
 const SECRET_PATTERNS: [string, RegExp][] = [
   ["GitHub token", /\bgh[pousr]_[A-Za-z0-9]{36,}\b/],
   ["GitHub fine-grained token", /\bgithub_pat_[A-Za-z0-9_]{40,}\b/],
